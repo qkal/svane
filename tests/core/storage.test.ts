@@ -57,12 +57,12 @@ describe('persistCache + hydrateCache', () => {
   });
 
   it('returns empty Map when storage contains corrupted JSON', () => {
-    storage.setItem('fynd-cache', 'not valid json {{{');
+    storage.setItem('svane-cache', 'not valid json {{{');
     expect(hydrateCache(storage).size).toBe(0);
   });
 
   it('returns empty Map when storage contains null JSON value', () => {
-    storage.setItem('fynd-cache', 'null');
+    storage.setItem('svane-cache', 'null');
     expect(hydrateCache(storage).size).toBe(0);
   });
 
