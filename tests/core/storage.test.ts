@@ -57,12 +57,12 @@ describe('persistCache + hydrateCache', () => {
   });
 
   it('returns empty Map when storage contains corrupted JSON', () => {
-    storage.setItem('cresh-cache', 'not valid json {{{');
+    storage.setItem('quelm-cache', 'not valid json {{{');
     expect(hydrateCache(storage).size).toBe(0);
   });
 
   it('returns empty Map when storage contains null JSON value', () => {
-    storage.setItem('cresh-cache', 'null');
+    storage.setItem('quelm-cache', 'null');
     expect(hydrateCache(storage).size).toBe(0);
   });
 

@@ -1,11 +1,11 @@
-# Cresh
+# Quelm
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/cresh)](https://npmjs.com/package/cresh)
-[![license](https://img.shields.io/npm/l/cresh)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/quelm)](https://npmjs.com/package/quelm)
+[![license](https://img.shields.io/npm/l/quelm)](./LICENSE)
 
-## Why Cresh?
+## Why Quelm?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add cresh
+bun add quelm
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'cresh';
+import { createCache } from 'quelm';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 
