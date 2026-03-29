@@ -162,11 +162,11 @@ export class QueryRunner<T, U = T> {
   }
 
   private async fetchWithRetry(attempt = 0): Promise<void> {
-    this.abortController?.abort(); // abort any previous in-flight
+    this.abortController?.abort();
     this.abortController = new AbortController();
     const { signal } = this.abortController;
 
-    // Deduplication: attach to existing in-flight promise if present
+    // Deduplication: attach to existing full-retry-chain promise if present
     const existing = this.store.getInFlight(this.serializedKey);
     if (existing) {
       try {
@@ -181,12 +181,12 @@ export class QueryRunner<T, U = T> {
       return;
     }
 
-    // Start a new fetch
-    const promise = this.config.fn(signal);
-    this.store.setInFlight(this.serializedKey, promise, this.abortController);
+    // Build the full retry-chain promise (resolves with T or rejects after all retries)
+    const retryChain = this.executeWithRetry(attempt, signal);
+    this.store.setInFlight(this.serializedKey, retryChain, this.abortController);
 
     try {
-      const data = await promise;
+      const data = await retryChain;
       this.store.clearInFlight(this.serializedKey);
       if (this.destroyed || signal.aborted) return;
       this.store.set(this.serializedKey, { data, timestamp: Date.now(), error: null });
@@ -194,14 +194,22 @@ export class QueryRunner<T, U = T> {
     } catch (err) {
       this.store.clearInFlight(this.serializedKey);
       if (this.destroyed || signal.aborted) return;
-      if (attempt < this.cacheConfig.retry) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 30_000);
-        await new Promise<void>((resolve) => setTimeout(resolve, delay));
-        if (this.destroyed || signal.aborted) return;
-        return this.fetchWithRetry(attempt + 1);
-      }
       const error = err instanceof Error ? err : new Error(String(err));
       this.setState({ ...this.state, status: 'error', error });
+    }
+  }
+
+  private async executeWithRetry(attempt: number, signal: AbortSignal): Promise<T> {
+    try {
+      return await this.config.fn(signal);
+    } catch (err) {
+      if (attempt < this.cacheConfig.retry && !signal.aborted) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 30_000);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        if (signal.aborted) throw err;
+        return this.executeWithRetry(attempt + 1, signal);
+      }
+      throw err;
     }
   }
 

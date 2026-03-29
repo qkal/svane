@@ -400,6 +400,7 @@ describe('QueryRunner', () => {
       await vi.runAllTimersAsync();
 
       expect(delays.every((d) => d <= 30_000)).toBe(true);
+      expect(delays).toContain(30_000);
       vi.restoreAllMocks();
     });
   });
@@ -431,6 +432,55 @@ describe('QueryRunner', () => {
       runner.destroy();
       await vi.runAllTimersAsync();
       expect(capturedSignal?.aborted).toBe(true);
+    });
+  });
+
+  describe('request deduplication', () => {
+    it('shares a single in-flight request between two runners for the same key', async () => {
+      const fn = vi.fn(async () => 'shared');
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
+      const config = { key: 'dedup', fn };
+      const runner1 = new QueryRunner(store, config, { ...BASE_CONFIG });
+      const runner2 = new QueryRunner(store, config, { ...BASE_CONFIG });
+
+      runner1.execute();
+      runner2.execute();
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(runner1.getState().status).toBe('success');
+      expect(runner2.getState().status).toBe('success');
+    });
+  });
+
+  describe('reactive key (getter function)', () => {
+    it('resolves key from getter function', async () => {
+      const fn = vi.fn(async () => 'value');
+      const runner = makeRunner({ key: () => ['user', 42], fn });
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(runner.getSerializedKey()).toBe('["user",42]');
+      expect(runner.getState().status).toBe('success');
+    });
+  });
+
+  describe('getSerializedKey', () => {
+    it('returns the serialized cache key', () => {
+      const runner = makeRunner({ key: ['todos', 1], fn: vi.fn() });
+      expect(runner.getSerializedKey()).toBe('["todos",1]');
+    });
+  });
+
+  describe('reset', () => {
+    it('allows re-execution after destroy', async () => {
+      const fn = vi.fn(async () => 'data');
+      const runner = makeRunner({ fn });
+      runner.execute();
+      runner.destroy();
+      runner.reset();
+      runner.execute();
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
     });
   });
 });
