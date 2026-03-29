@@ -9,7 +9,7 @@ const BASE_CONFIG: CacheConfig = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
   persist: undefined,
-  gcTime: 300_000,
+  gcTime: Number.MAX_SAFE_INTEGER,
 };
 
 function makeRunner<T>(

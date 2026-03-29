@@ -125,13 +125,15 @@ export class CacheStore {
    */
   invalidate(serializedPrefix: string): void {
     const prefixArray = JSON.parse(serializedPrefix) as unknown[];
+    const invalidatedKeys: string[] = [];
     for (const [key, entry] of this.cache) {
       const keyArray = JSON.parse(key) as unknown[];
       if (matchesKey(prefixArray, keyArray)) {
         this.cache.set(key, { ...entry, timestamp: 0 });
-        this.notify(key);
+        invalidatedKeys.push(key);
       }
     }
+    for (const key of invalidatedKeys) this.notify(key);
   }
 
   /**

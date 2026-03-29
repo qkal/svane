@@ -226,4 +226,94 @@ describe('CacheStore', () => {
       expect(() => store.cancelQuery('["todos"]')).not.toThrow();
     });
   });
+
+  describe('getQueryData / setQueryData', () => {
+    it('getQueryData returns undefined on miss', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      expect(store.getQueryData('["todos"]')).toBeUndefined();
+    });
+
+    it('getQueryData returns data after set', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["todos"]', makeEntry([1, 2, 3]));
+      expect(store.getQueryData('["todos"]')).toEqual([1, 2, 3]);
+    });
+
+    it('setQueryData with direct value creates entry and notifies', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      const cb = vi.fn();
+      store.subscribe('["todos"]', cb);
+      store.setQueryData('["todos"]', [4, 5, 6]);
+      expect(store.getQueryData('["todos"]')).toEqual([4, 5, 6]);
+      expect(cb).toHaveBeenCalledOnce();
+    });
+
+    it('setQueryData with updater function receives previous value', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["todos"]', makeEntry([1, 2]));
+      store.setQueryData<number[]>('["todos"]', (prev) => [...(prev ?? []), 3]);
+      expect(store.getQueryData('["todos"]')).toEqual([1, 2, 3]);
+    });
+
+    it('setQueryData with updater receives undefined when key is missing', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      let received: unknown[] | undefined = [99];
+      store.setQueryData<unknown[]>('["todos"]', (prev) => {
+        received = prev;
+        return [];
+      });
+      expect(received).toBeUndefined();
+    });
+  });
+
+  describe('invalidate', () => {
+    it('marks exact key as stale', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["todos"]', makeEntry([1, 2]));
+      expect(store.isStale('["todos"]', 30_000)).toBe(false);
+      store.invalidate('["todos"]');
+      expect(store.isStale('["todos"]', 30_000)).toBe(true);
+    });
+
+    it('marks child keys as stale via prefix matching', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["todos",1]', makeEntry({ id: 1 }));
+      store.set('["todos",2]', makeEntry({ id: 2 }));
+      store.set('["posts"]', makeEntry([]));
+      store.invalidate('["todos"]');
+      expect(store.isStale('["todos",1]', 30_000)).toBe(true);
+      expect(store.isStale('["todos",2]', 30_000)).toBe(true);
+      expect(store.isStale('["posts"]', 30_000)).toBe(false);
+    });
+
+    it('notifies subscribers of invalidated keys', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["todos",1]', makeEntry({ id: 1 }));
+      const cb = vi.fn();
+      store.subscribe('["todos",1]', cb);
+      store.invalidate('["todos"]');
+      expect(cb).toHaveBeenCalledOnce();
+    });
+
+    it('is a no-op for keys that do not exist', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      expect(() => store.invalidate('["missing"]')).not.toThrow();
+    });
+  });
+
+  describe('entries', () => {
+    it('yields all current entries', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      store.set('["a"]', makeEntry(1));
+      store.set('["b"]', makeEntry(2));
+      const result = [...store.entries()];
+      expect(result).toHaveLength(2);
+      expect(result.map(([k]) => k).sort()).toEqual(['["a"]', '["b"]']);
+    });
+
+    it('yields nothing when cache is empty', () => {
+      const store = new CacheStore({ gcTime: 300_000 });
+      expect([...store.entries()]).toHaveLength(0);
+    });
+  });
 });
