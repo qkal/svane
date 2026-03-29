@@ -1,11 +1,11 @@
-# Svane
+# Quelt
 
 **Smart data layer for SvelteKit — fetch, cache, done.**
 
-[![npm](https://img.shields.io/npm/v/svane)](https://npmjs.com/package/svane)
-[![license](https://img.shields.io/npm/l/svane)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/quelt)](https://npmjs.com/package/quelt)
+[![license](https://img.shields.io/npm/l/quelt)](./LICENSE)
 
-## Why Svane?
+## Why Quelt?
 
 - **Svelte 5 runes native** — `$state`, `$effect`. No `writable()`, no wrappers.
 - **No `QueryClientProvider`** — just `createCache()` and `cache.query()`.
@@ -15,12 +15,12 @@
 ## Quick Start
 
 ```bash
-bun add svane
+bun add quelt
 ```
 
 ```ts
 // $lib/cache.ts
-import { createCache } from 'svane';
+import { createCache } from 'quelt';
 export const cache = createCache({ staleTime: 30_000 });
 ```
 

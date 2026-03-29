@@ -24,7 +24,7 @@ export interface QueryResult<T> {
  * Call once per app, typically in `$lib/cache.ts`.
  *
  * @example
- * import { createCache } from 'svane';
+ * import { createCache } from 'quelt';
  * export const cache = createCache({ staleTime: 30_000 });
  */
 export function createCache(config: Partial<CacheConfig> = {}) {
