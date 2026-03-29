@@ -18,7 +18,7 @@ function makeRunner<T>(
   store?: CacheStore,
 ): QueryRunner<T> {
   return new QueryRunner(
-    store ?? new CacheStore({ gcTime: 300_000 }),
+    store ?? new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER }),
     { key: 'test', ...queryConfig } as QueryConfig<T>,
     { ...BASE_CONFIG, ...cacheConfig },
   );
@@ -40,7 +40,7 @@ describe('QueryRunner', () => {
     });
 
     it('pre-populates data from fresh cache', () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: [1, 2], timestamp: Date.now(), error: null });
       const runner = makeRunner({ fn: vi.fn() }, {}, store);
       // Still idle before execute() — data is just pre-loaded into state
@@ -117,7 +117,7 @@ describe('QueryRunner', () => {
 
   describe('execute — fresh cache hit', () => {
     it('returns success immediately without fetching', async () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: [1], timestamp: Date.now(), error: null });
 
       const fn = vi.fn();
@@ -132,7 +132,7 @@ describe('QueryRunner', () => {
 
   describe('execute — stale cache (refreshing)', () => {
     it('returns stale data immediately + triggers background refetch', async () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: ['stale'], timestamp: Date.now(), error: null });
       vi.advanceTimersByTime(30_001);
 
@@ -149,7 +149,7 @@ describe('QueryRunner', () => {
     });
 
     it('sets isStale to true during refreshing', async () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: 'old', timestamp: Date.now(), error: null });
       vi.advanceTimersByTime(30_001);
 
@@ -197,7 +197,7 @@ describe('QueryRunner', () => {
     });
 
     it('preserves stale data after background refetch failure', async () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: ['stale'], timestamp: Date.now(), error: null });
       vi.advanceTimersByTime(30_001);
 
@@ -293,7 +293,7 @@ describe('QueryRunner', () => {
 
   describe('window focus', () => {
     it('refetches stale data on visibilitychange', async () => {
-      const store = new CacheStore({ gcTime: 300_000 });
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
       store.set('["test"]', { data: 'old', timestamp: Date.now(), error: null });
       vi.advanceTimersByTime(30_001); // make stale
 
