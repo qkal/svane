@@ -504,4 +504,31 @@ describe('QueryRunner', () => {
       expect(runner.getState().status).toBe('success');
     });
   });
+
+  describe('keepPreviousData', () => {
+    it('starts with status refreshing and previous data when no cache hit', async () => {
+      const fn = vi.fn(async () => 'new');
+      const store = new CacheStore({ gcTime: 300_000 });
+      const runner = new QueryRunner(
+        store,
+        { key: 'test', fn, keepPreviousData: true },
+        { ...BASE_CONFIG },
+        'previous' as string, // previousData
+      );
+      runner.execute();
+      // Before fetch resolves: should show previousData with refreshing status
+      expect(runner.getState().status).toBe('refreshing');
+      expect(runner.getState().data).toBe('previous');
+      await vi.runAllTimersAsync();
+      expect(runner.getState().status).toBe('success');
+      expect(runner.getState().data).toBe('new');
+    });
+
+    it('starts with status loading when keepPreviousData is false and no cache', () => {
+      const runner = makeRunner({ fn: vi.fn(async () => 'data') });
+      runner.execute();
+      expect(runner.getState().status).toBe('loading');
+      expect(runner.getState().data).toBeUndefined();
+    });
+  });
 });
