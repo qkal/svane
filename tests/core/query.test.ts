@@ -450,6 +450,27 @@ describe('QueryRunner', () => {
       expect(fn).toHaveBeenCalledTimes(1);
       expect(runner1.getState().status).toBe('success');
       expect(runner2.getState().status).toBe('success');
+      expect(runner2.getState().data).toBe('shared');
+    });
+
+    it('dedup consumer receives success after retry, not immediate rejection', async () => {
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('transient'))
+        .mockResolvedValue('shared');
+      const store = new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER });
+      const config = { key: 'dedup-retry', fn };
+      const runner1 = new QueryRunner(store, config, { ...BASE_CONFIG, retry: 1 });
+      const runner2 = new QueryRunner(store, config, { ...BASE_CONFIG, retry: 1 });
+
+      runner1.execute();
+      runner2.execute();
+      await vi.runAllTimersAsync();
+
+      expect(fn).toHaveBeenCalledTimes(2); // 1 failure + 1 retry
+      expect(runner1.getState().status).toBe('success');
+      expect(runner2.getState().status).toBe('success');
+      expect(runner2.getState().data).toBe('shared');
     });
   });
 

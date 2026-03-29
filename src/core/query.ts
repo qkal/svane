@@ -161,7 +161,7 @@ export class QueryRunner<T, U = T> {
     this.sideEffectsSetUp = false;
   }
 
-  private async fetchWithRetry(attempt = 0): Promise<void> {
+  private async fetchWithRetry(): Promise<void> {
     this.abortController?.abort();
     this.abortController = new AbortController();
     const { signal } = this.abortController;
@@ -182,7 +182,7 @@ export class QueryRunner<T, U = T> {
     }
 
     // Build the full retry-chain promise (resolves with T or rejects after all retries)
-    const retryChain = this.executeWithRetry(attempt, signal);
+    const retryChain = this.executeWithRetry(0, signal);
     this.store.setInFlight(this.serializedKey, retryChain, this.abortController);
 
     try {
