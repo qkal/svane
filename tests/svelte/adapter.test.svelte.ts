@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import QueryTest from './fixtures/QueryTest.svelte';
 import ReactiveKeyTest from './fixtures/ReactiveKeyTest.svelte';
@@ -83,23 +84,44 @@ describe('Svelte adapter', () => {
   });
 
   describe('keepPreviousData', () => {
-    it('shows previous data while re-fetching on key change instead of loading', async () => {
-      const fn = vi.fn(async (_signal: AbortSignal) => 'user-data');
+    it('shows previous data with refreshing status during key change instead of loading', async () => {
+      let resolveFetch: (value: string) => void;
+      let callCount = 0;
+
+      const fn = vi.fn(async (_signal: AbortSignal) => {
+        callCount++;
+        if (callCount === 1) return `user-1`;
+        // Second call — return a promise we control
+        return new Promise<string>((resolve) => {
+          resolveFetch = resolve;
+        });
+      });
+
       const { component } = render(ReactiveKeyTest, {
         props: { fn, keepPreviousData: true },
       });
 
+      // First fetch completes normally
       await vi.runAllTimersAsync();
-      await waitFor(() =>
-        expect(screen.getByTestId('data').textContent).toBe('"user-data"'),
-      );
+      await waitFor(() => {
+        expect(screen.getByTestId('status').textContent).toBe('success');
+        expect(screen.getByTestId('data').textContent).toBe('"user-1"');
+      });
 
+      // Change key — effect will re-run but second fetch is pending
       component.setUserId(2);
-      // After key change but before fetch completes, status should not be 'loading'
-      expect(screen.getByTestId('status').textContent).not.toBe('loading');
+      await tick(); // flush the $effect
 
+      // NOW verify keepPreviousData: status should be 'refreshing', data still shows old value
+      expect(screen.getByTestId('status').textContent).toBe('refreshing');
+      expect(screen.getByTestId('data').textContent).toBe('"user-1"');
+
+      // Resolve the pending fetch
+      resolveFetch!('user-2');
       await vi.runAllTimersAsync();
-      await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+      await waitFor(() => {
+        expect(screen.getByTestId('data').textContent).toBe('"user-2"');
+      });
     });
   });
 

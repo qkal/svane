@@ -82,6 +82,9 @@ export function createReactiveQuery<T, U = T>(
     get isStale() {
       return state.isStale;
     },
-    refetch: (): Promise<void> => currentRunner?.refetch() ?? Promise.resolve(),
+    refetch: (): Promise<void> => {
+      if (!currentRunner?.isEnabled()) return Promise.resolve();
+      return currentRunner.refetch();
+    },
   };
 }
