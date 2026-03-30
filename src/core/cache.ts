@@ -31,7 +31,18 @@ export class CacheStore {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
     for (const key of this.cache.keys()) {
-      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+      try {
+        const parsedKey = JSON.parse(key);
+        if (Array.isArray(parsedKey)) {
+          this.keyArrays.set(key, parsedKey);
+        } else {
+          // Skip non-array keys - they are corrupted
+          this.cache.delete(key);
+        }
+      } catch {
+        // Skip malformed JSON keys - they are corrupted
+        this.cache.delete(key);
+      }
     }
   }
 
@@ -44,7 +55,20 @@ export class CacheStore {
   set(key: string, entry: CacheEntry): void {
     this.cache.set(key, entry);
     if (!this.keyArrays.has(key)) {
-      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+      try {
+        const parsedKey = JSON.parse(key);
+        if (Array.isArray(parsedKey)) {
+          this.keyArrays.set(key, parsedKey);
+        } else {
+          throw new Error(`Cache key must serialize to an array, got: ${typeof parsedKey}`);
+        }
+      } catch (error) {
+        // Re-throw with context if it's our validation error, otherwise wrap parse error
+        if (error instanceof Error && error.message.startsWith('Cache key must serialize')) {
+          throw error;
+        }
+        throw new Error(`Failed to parse cache key as JSON: ${key}`);
+      }
     }
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
