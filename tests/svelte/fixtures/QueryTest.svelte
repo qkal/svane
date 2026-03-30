@@ -10,7 +10,11 @@ interface Props {
 
 const { fn, enabled, staleTime, refetchOnReconnect = true }: Props = $props();
 
-const cache = createCache({ refetchOnWindowFocus: false, staleTime, refetchOnReconnect });
+const cache = createCache({
+  refetchOnWindowFocus: false,
+  ...(staleTime !== undefined && { staleTime }),
+  ...(refetchOnReconnect !== undefined && { refetchOnReconnect }),
+});
 const result = cache.query({ key: 'test', fn, enabled });
 </script>
 
