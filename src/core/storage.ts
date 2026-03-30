@@ -13,7 +13,8 @@ export function persistCache(storage: Storage, entries: Map<string, CacheEntry>)
   try {
     const serialized = JSON.stringify(Object.fromEntries(entries));
     storage.setItem(STORAGE_KEY, serialized);
-  } catch {
+  } catch (error) {
+    console.warn('[kvale] Failed to persist cache:', error);
     // Best-effort — quota exceeded, private mode, etc.
   }
 }
@@ -69,7 +70,8 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
     }
 
     return new Map(entries);
-  } catch {
+  } catch (error) {
+    console.warn('[kvale] Failed to hydrate cache:', error);
     return new Map();
   }
 }
