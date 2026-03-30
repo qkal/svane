@@ -85,7 +85,7 @@ describe('QueryRunner', () => {
         get enabled() {
           throw new Error('access error');
         },
-      } as any);
+      } as unknown as QueryConfig<unknown>);
       expect(runner.isEnabled()).toBe(false);
     });
   });
@@ -249,7 +249,7 @@ describe('QueryRunner', () => {
       expect(runner.getState().status).toBe('success');
     });
 
-    it('does not execute when enabled getter throws', async () => {
+    it('does not execute when enabled function throws', async () => {
       const fn = vi.fn();
       const runner = makeRunner({
         fn,

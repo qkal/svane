@@ -53,7 +53,7 @@ describe('Svelte adapter', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
-  it('stays idle when enabled getter throws', async () => {
+  it('stays idle when enabled function throws', async () => {
     const fn = vi.fn();
     render(QueryTest, {
       props: {
