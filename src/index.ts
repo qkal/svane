@@ -102,7 +102,7 @@ export function createCache(config: Partial<CacheConfig> = {}) {
      * cache.invalidate(['todos', userId]); // invalidates one specific user's todos
      */
     invalidate(key: string | unknown[]): void {
-      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      const normalized = normalizeKey(key);
       store.invalidate(serializeKey(normalized));
     },
 
@@ -125,8 +125,12 @@ export function createCache(config: Partial<CacheConfig> = {}) {
       const staleTime = prefetchConfig.staleTime ?? resolvedConfig.staleTime;
       if (!store.isStale(serialized, staleTime)) return;
       const controller = new AbortController();
-      const data = await prefetchConfig.fn(controller.signal);
-      store.set(serialized, { data, timestamp: Date.now(), error: null });
+      try {
+        const data = await prefetchConfig.fn(controller.signal);
+        store.set(serialized, { data, timestamp: Date.now(), error: null });
+      } catch {
+        // prefetch is best-effort — silently discard failures
+      }
     },
 
     /**
@@ -137,7 +141,7 @@ export function createCache(config: Partial<CacheConfig> = {}) {
      * const todos = cache.getQueryData<Todo[]>('todos');
      */
     getQueryData<T>(key: string | unknown[]): T | undefined {
-      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      const normalized = normalizeKey(key);
       return store.getQueryData<T>(serializeKey(normalized));
     },
 
@@ -151,7 +155,7 @@ export function createCache(config: Partial<CacheConfig> = {}) {
      * cache.setQueryData<Todo[]>('todos', (prev) => [...(prev ?? []), newTodo]);
      */
     setQueryData<T>(key: string | unknown[], data: T | ((prev: T | undefined) => T)): void {
-      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      const normalized = normalizeKey(key);
       store.setQueryData<T>(serializeKey(normalized), data);
     },
 
@@ -166,7 +170,7 @@ export function createCache(config: Partial<CacheConfig> = {}) {
      * }
      */
     cancelQuery(key: string | unknown[]): void {
-      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      const normalized = normalizeKey(key);
       store.cancelQuery(serializeKey(normalized));
     },
   };
