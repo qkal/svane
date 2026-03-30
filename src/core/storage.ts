@@ -39,10 +39,17 @@ export function hydrateCache(storage: Storage): Map<string, CacheEntry> {
         typeof value === 'object' &&
         !Array.isArray(value) &&
         'timestamp' in value &&
-        typeof (value as any).timestamp === 'number' &&
-        'data' in value
+        typeof value.timestamp === 'number' &&
+        'data' in value &&
+        'error' in value &&
+        (value.error === null || value.error instanceof Error)
       ) {
-        entries.push([key, value as CacheEntry]);
+        const entry: CacheEntry = {
+          data: value.data,
+          timestamp: value.timestamp,
+          error: value.error,
+        };
+        entries.push([key, entry]);
       }
     }
 
