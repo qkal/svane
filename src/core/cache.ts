@@ -30,8 +30,9 @@ export class CacheStore {
   constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
-    // keyArrays is populated lazily: via set() for new keys, and on first
-    // invalidate() call for keys that were hydrated from persisted storage.
+    for (const key of this.cache.keys()) {
+      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+    }
   }
 
   /** Returns the cached entry for `key`, or `undefined` if not present. */
@@ -41,14 +42,10 @@ export class CacheStore {
 
   /** Stores `entry` under `key`, persists to storage (if configured), and notifies subscribers. */
   set(key: string, entry: CacheEntry): void {
-    if (!this.keyArrays.has(key)) {
-      const parsed = JSON.parse(key) as unknown;
-      if (!Array.isArray(parsed)) {
-        throw new Error(`Cache key must serialize to an array, got: ${key}`);
-      }
-      this.keyArrays.set(key, parsed);
-    }
     this.cache.set(key, entry);
+    if (!this.keyArrays.has(key)) {
+      this.keyArrays.set(key, JSON.parse(key) as unknown[]);
+    }
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -144,23 +141,7 @@ export class CacheStore {
   invalidate(serializedPrefix: string): void {
     const prefixArray = JSON.parse(serializedPrefix) as unknown[];
     const invalidatedKeys: string[] = [];
-    for (const key of this.cache.keys()) {
-      // Lazily populate keyArrays for keys hydrated from persisted storage.
-      let keyArray = this.keyArrays.get(key);
-      if (!keyArray) {
-        try {
-          const parsed = JSON.parse(key) as unknown;
-          if (!Array.isArray(parsed)) {
-            console.warn(`[kvale] Skipping corrupt cache key (not an array): ${key}`);
-            continue;
-          }
-          keyArray = parsed;
-          this.keyArrays.set(key, keyArray);
-        } catch {
-          console.warn(`[kvale] Skipping cache key with invalid JSON: ${key}`);
-          continue;
-        }
-      }
+    for (const [key, keyArray] of this.keyArrays) {
       if (matchesKey(prefixArray, keyArray)) {
         const entry = this.cache.get(key);
         if (entry) {
