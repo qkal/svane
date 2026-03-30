@@ -1,11 +1,18 @@
 import { CacheStore } from './core/cache';
 import { normalizeKey, serializeKey } from './core/key';
 import { CACHE_DEFAULTS } from './core/types';
-import type { CacheConfig, QueryConfig } from './core/types';
+import type {
+  CacheConfig,
+  MutationConfig,
+  QueryConfig,
+  QueryStatus,
+  MutationStatus,
+} from './core/types';
 import { createReactiveQuery } from './svelte/adapter.svelte';
+import { createReactiveMutation } from './svelte/mutation-adapter.svelte';
 
-export type { CacheConfig, QueryConfig } from './core/types';
-export type { QueryStatus } from './core/types';
+export type { CacheConfig, QueryConfig, MutationConfig } from './core/types';
+export type { QueryStatus, MutationStatus } from './core/types';
 
 /**
  * The reactive object returned by `cache.query()`.
@@ -20,6 +27,18 @@ export interface QueryResult<T> {
 }
 
 /**
+ * The reactive object returned by `cache.mutate()`.
+ * Properties are getters — do not destructure.
+ */
+export interface MutationResult<TData, TVariables> {
+  readonly status: 'idle' | 'loading' | 'success' | 'error';
+  readonly data: TData | undefined;
+  readonly error: Error | null;
+  mutate(variables: TVariables): Promise<void>;
+  reset(): void;
+}
+
+/**
  * Creates a cache instance with global configuration.
  * Call once per app, typically in `$lib/cache.ts`.
  *
@@ -29,35 +48,126 @@ export interface QueryResult<T> {
  */
 export function createCache(config: Partial<CacheConfig> = {}) {
   const resolvedConfig: CacheConfig = { ...CACHE_DEFAULTS, ...config };
-  const store = new CacheStore({ persist: resolvedConfig.persist, gcTime: resolvedConfig.gcTime });
+  const store = new CacheStore({
+    persist: resolvedConfig.persist,
+    gcTime: resolvedConfig.gcTime,
+  });
 
   return {
     /**
      * Creates a reactive query bound to this cache instance.
      * Returns a reactive object — access properties directly, do not destructure.
+     * Accepts a key getter for reactive keys: `key: () => ['todos', userId]`.
      *
      * @example
      * const todos = cache.query<Todo[]>({
      *   key: 'todos',
-     *   fn: () => fetch('/api/todos').then(r => r.json()),
+     *   fn: (signal) => fetch('/api/todos', { signal }).then(r => r.json()),
      * });
-     * // In template: {#if todos.status === 'loading'}
      */
-    query<T>(queryConfig: QueryConfig<T>): QueryResult<T> {
-      return createReactiveQuery(store, queryConfig, resolvedConfig) as QueryResult<T>;
+    query<T, U = T>(queryConfig: QueryConfig<T, U>): QueryResult<U> {
+      return createReactiveQuery<T, U>(store, queryConfig, resolvedConfig) as QueryResult<U>;
     },
 
     /**
-     * Returns the raw cached data for `key`, or `undefined` if not present.
-     * Does not trigger a fetch. Accepts string or array keys.
+     * Creates a reactive mutation. Call inside a component (runes context).
+     * Use `onMutate` to write optimistic data and return rollback context.
+     * Use `onError` to restore rollback context. Use `onSettled` to invalidate.
      *
      * @example
-     * cache.getQueryData<Todo[]>('todos')
-     * cache.getQueryData<Todo>(['todos', 1])
+     * const deleteTodo = cache.mutate<void, number>({
+     *   fn: (id, signal) => fetch(`/api/todos/${id}`, { method: 'DELETE', signal }),
+     *   onMutate: (id) => {
+     *     const prev = cache.getQueryData<Todo[]>('todos');
+     *     cache.cancelQuery('todos');
+     *     cache.setQueryData('todos', prev?.filter(t => t.id !== id));
+     *     return prev;
+     *   },
+     *   onError: (_err, _id, prev) => cache.setQueryData('todos', prev),
+     *   onSettled: () => cache.invalidate('todos'),
+     * });
+     */
+    mutate<TData, TVariables, TContext = unknown>(
+      mutationConfig: MutationConfig<TData, TVariables, TContext>,
+    ): MutationResult<TData, TVariables> {
+      return createReactiveMutation<TData, TVariables, TContext>(mutationConfig);
+    },
+
+    /**
+     * Marks all cache entries matching `key` (by array prefix) as stale and
+     * notifies active queries to re-fetch.
+     *
+     * @example
+     * cache.invalidate('todos');           // invalidates all 'todos' queries
+     * cache.invalidate(['todos', userId]); // invalidates one specific user's todos
+     */
+    invalidate(key: string | unknown[]): void {
+      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      store.invalidate(serializeKey(normalized));
+    },
+
+    /**
+     * Populates the cache without creating a reactive result.
+     * No-ops if the entry exists and is still fresh.
+     * Use on route hover or before navigation to pre-load data.
+     *
+     * @example
+     * cache.prefetch({ key: 'todos', fn: (signal) => fetchTodos(signal) });
+     */
+    async prefetch<T>(
+      prefetchConfig: Pick<QueryConfig<T>, 'key' | 'fn' | 'staleTime'>,
+    ): Promise<void> {
+      const key = typeof prefetchConfig.key === 'function'
+        ? prefetchConfig.key()
+        : prefetchConfig.key;
+      const normalized = normalizeKey(key);
+      const serialized = serializeKey(normalized);
+      const staleTime = prefetchConfig.staleTime ?? resolvedConfig.staleTime;
+      if (!store.isStale(serialized, staleTime)) return;
+      const controller = new AbortController();
+      const data = await prefetchConfig.fn(controller.signal);
+      store.set(serialized, { data, timestamp: Date.now(), error: null });
+    },
+
+    /**
+     * Reads data directly from the cache for `key`.
+     * Returns `undefined` if the key is not present.
+     *
+     * @example
+     * const todos = cache.getQueryData<Todo[]>('todos');
      */
     getQueryData<T>(key: string | unknown[]): T | undefined {
-      const serialized = serializeKey(normalizeKey(key));
-      return store.getQueryData<T>(serialized);
+      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      return store.getQueryData<T>(serializeKey(normalized));
+    },
+
+    /**
+     * Writes data directly to the cache for `key`, bypassing fetch.
+     * Accepts a value or an updater function.
+     * Notifies all active queries subscribed to this key.
+     *
+     * @example
+     * cache.setQueryData('todos', [...todos, newTodo]);
+     * cache.setQueryData<Todo[]>('todos', (prev) => [...(prev ?? []), newTodo]);
+     */
+    setQueryData<T>(key: string | unknown[], data: T | ((prev: T | undefined) => T)): void {
+      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      store.setQueryData<T>(serializeKey(normalized), data);
+    },
+
+    /**
+     * Aborts the in-flight request for `key`. Call in `onMutate` before writing
+     * optimistic data to prevent a racing refetch from overwriting it.
+     *
+     * @example
+     * onMutate: (id) => {
+     *   cache.cancelQuery('todos');
+     *   cache.setQueryData('todos', prev?.filter(t => t.id !== id));
+     * }
+     */
+    cancelQuery(key: string | unknown[]): void {
+      const normalized = normalizeKey(typeof key === 'string' ? key : key);
+      store.cancelQuery(serializeKey(normalized));
     },
   };
 }
