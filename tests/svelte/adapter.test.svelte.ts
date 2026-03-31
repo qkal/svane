@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCache } from '../../src/index';
+import CacheQueryTest from './fixtures/CacheQueryTest.svelte';
 import QueryTest from './fixtures/QueryTest.svelte';
 import ReactiveKeyTest from './fixtures/ReactiveKeyTest.svelte';
 import SelectTest from './fixtures/SelectTest.svelte';
@@ -251,6 +252,37 @@ describe('Svelte adapter', () => {
 
       expect(fn).toHaveBeenCalledTimes(1);
       expect(cache.getQueryData('prefetch-dedup')).toBe('shared');
+    });
+  });
+
+  describe('onError integration', () => {
+    it('fires onError at cache level when query fails after all retries', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('network error'));
+      const onError = vi.fn();
+      const cache = createCache({ refetchOnWindowFocus: false, retry: 0, onError });
+      render(CacheQueryTest, { cache, fn, queryKey: 'onError-test' });
+      await vi.runAllTimersAsync();
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), ['onError-test']);
+    });
+  });
+
+  describe('rehydrate', () => {
+    it('seeds cache so query starts at success with no loading flash', async () => {
+      const fn = vi.fn().mockResolvedValue([1, 2, 3]);
+      const serverCache = createCache({ refetchOnWindowFocus: false });
+      await serverCache.prefetch({ key: 'ssr-todos', fn });
+      const dehydrated = serverCache.dehydrate();
+
+      const clientCache = createCache({ refetchOnWindowFocus: false });
+      clientCache.rehydrate(dehydrated);
+
+      const { getByTestId } = render(CacheQueryTest, { cache: clientCache, fn, queryKey: 'ssr-todos' });
+      // After rehydrate the cache has data — query should start at success, not loading
+      await tick();
+      expect(getByTestId('status').textContent).toBe('success');
+      expect(getByTestId('data').textContent).toBe('[1,2,3]');
+      // fn was called once for prefetch — not again on the client query (cache hit)
+      expect(fn).toHaveBeenCalledTimes(1);
     });
   });
 });
