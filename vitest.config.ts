@@ -7,7 +7,7 @@ export default defineConfig({
     conditions: ['browser'],
   },
   test: {
-    setupFiles: ['./tests/setup.ts', '@testing-library/svelte/vitest'],
+    setupFiles: ['./tests/setup.ts'],
     environmentMatchGlobs: [
       ['tests/svelte/**', 'jsdom'],
       ['tests/core/query.test.ts', 'jsdom'],

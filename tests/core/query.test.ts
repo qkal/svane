@@ -80,12 +80,15 @@ describe('QueryRunner', () => {
     });
 
     it('returns false when accessing enabled throws', () => {
-      const runner = makeRunner({
-        fn: vi.fn(),
-        get enabled() {
+      const config = { key: 'test', fn: vi.fn() } as unknown as QueryConfig<unknown>;
+      Object.defineProperty(config, 'enabled', {
+        get() {
           throw new Error('access error');
         },
-      } as unknown as QueryConfig<unknown>);
+        configurable: true,
+        enumerable: true,
+      });
+      const runner = new QueryRunner(new CacheStore({ gcTime: Number.MAX_SAFE_INTEGER }), config, BASE_CONFIG);
       expect(runner.isEnabled()).toBe(false);
     });
   });
