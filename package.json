@@ -15,6 +15,7 @@
   },
   "files": ["dist"],
   "scripts": {
+    "prepublishOnly": "bun test && bun run package",
     "package": "svelte-package -i src",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
