@@ -362,4 +362,50 @@ describe('CacheStore', () => {
       expect(store.get('["todos"]')).toBeUndefined();
     });
   });
+
+  describe('onEvent', () => {
+    it('fires set event when setQueryData is called', () => {
+      const onEvent = vi.fn();
+      const store = new CacheStore({ gcTime: 300_000, onEvent });
+      store.setQueryData('["todos"]', [1, 2]);
+      expect(onEvent).toHaveBeenCalledWith({ type: 'set', key: ['todos'] });
+    });
+
+    it('does not fire set event on internal set() calls', () => {
+      const onEvent = vi.fn();
+      const store = new CacheStore({ gcTime: 300_000, onEvent });
+      store.set('["todos"]', { data: [1], timestamp: Date.now(), error: null });
+      expect(onEvent).not.toHaveBeenCalled();
+    });
+
+    it('fires invalidate event with key and matchedKeys', () => {
+      const onEvent = vi.fn();
+      const store = new CacheStore({ gcTime: 300_000, onEvent });
+      store.set('["todos",1]', { data: { id: 1 }, timestamp: Date.now(), error: null });
+      store.set('["todos",2]', { data: { id: 2 }, timestamp: Date.now(), error: null });
+      store.invalidate('["todos"]');
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'invalidate',
+          key: ['todos'],
+          matchedKeys: expect.arrayContaining([['todos', 1], ['todos', 2]]),
+        }),
+      );
+    });
+
+    it('does not fire invalidate event when no keys matched', () => {
+      const onEvent = vi.fn();
+      const store = new CacheStore({ gcTime: 300_000, onEvent });
+      store.invalidate('["todos"]');
+      expect(onEvent).not.toHaveBeenCalled();
+    });
+
+    it('fires gc event when entry is pruned by gcTime', () => {
+      const onEvent = vi.fn();
+      const store = new CacheStore({ gcTime: 5_000, onEvent });
+      store.setQueryData('["todos"]', [1]);
+      vi.advanceTimersByTime(5_001);
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'gc', key: ['todos'] }));
+    });
+  });
 });

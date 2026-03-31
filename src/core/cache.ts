@@ -1,6 +1,6 @@
 import { matchesKey } from './key';
 import { hydrateCache, persistCache } from './storage';
-import type { CacheConfig, CacheEntry } from './types';
+import type { CacheConfig, CacheEntry, CacheEvent } from './types';
 
 type CacheSubscriber = () => void;
 
@@ -17,7 +17,7 @@ export class CacheStore {
   private readonly cache: Map<string, CacheEntry>;
   private readonly keyArrays: Map<string, unknown[]> = new Map();
   private readonly subscribers: Map<string, Set<CacheSubscriber>> = new Map();
-  private readonly config: Pick<CacheConfig, 'persist' | 'gcTime'>;
+  private readonly config: Pick<CacheConfig, 'persist' | 'gcTime' | 'onEvent'>;
 
   // In-flight deduplication
   private readonly inFlight: Map<string, Promise<unknown>> = new Map();
@@ -27,7 +27,7 @@ export class CacheStore {
   private readonly keyRefs: Map<string, number> = new Map();
   private readonly gcTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
-  constructor(config: Pick<CacheConfig, 'persist' | 'gcTime'>) {
+  constructor(config: Pick<CacheConfig, 'persist' | 'gcTime' | 'onEvent'>) {
     this.config = config;
     this.cache = config.persist ? hydrateCache(config.persist) : new Map();
     // keyArrays is populated lazily: via set() for new keys, and on first
@@ -133,6 +133,7 @@ export class CacheStore {
     if ((this.keyRefs.get(key) ?? 0) === 0) {
       this.startGcTimer(key);
     }
+    this.emitEvent({ type: 'set', key: JSON.parse(key) as unknown[] });
   }
 
   /**
@@ -144,6 +145,7 @@ export class CacheStore {
   invalidate(serializedPrefix: string): void {
     const prefixArray = JSON.parse(serializedPrefix) as unknown[];
     const invalidatedKeys: string[] = [];
+    const matchedKeyArrays: unknown[][] = [];
     for (const key of this.cache.keys()) {
       // Lazily populate keyArrays for keys hydrated from persisted storage.
       let keyArray = this.keyArrays.get(key);
@@ -166,10 +168,14 @@ export class CacheStore {
         if (entry) {
           this.cache.set(key, { ...entry, timestamp: 0 });
           invalidatedKeys.push(key);
+          matchedKeyArrays.push(keyArray);
         }
       }
     }
     for (const key of invalidatedKeys) this.notify(key);
+    if (invalidatedKeys.length > 0) {
+      this.emitEvent({ type: 'invalidate', key: prefixArray, matchedKeys: matchedKeyArrays });
+    }
   }
 
   /**
@@ -246,8 +252,17 @@ export class CacheStore {
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);
+      this.emitEvent({ type: 'gc', key: JSON.parse(key) as unknown[] });
     }, this.config.gcTime);
     this.gcTimers.set(key, timer);
+  }
+
+  private emitEvent(event: CacheEvent): void {
+    try {
+      this.config.onEvent?.(event);
+    } catch {
+      // silently swallow
+    }
   }
 
   private notify(key: string): void {
