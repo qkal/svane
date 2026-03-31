@@ -715,7 +715,7 @@ describe('QueryRunner', () => {
       runner.execute();
       await vi.runAllTimersAsync();
       const successEvent = onEvent.mock.calls
-        .map(([e]: [CacheEvent]) => e)
+        .map((args: unknown[]) => args[0] as CacheEvent)
         .find((e) => e.type === 'fetch:success');
       expect(successEvent).toBeDefined();
       expect((successEvent as { type: 'fetch:success'; key: unknown[]; duration: number }).duration).toBeGreaterThanOrEqual(0);
@@ -728,7 +728,7 @@ describe('QueryRunner', () => {
       runner.execute();
       await vi.runAllTimersAsync();
       const errorEvents = onEvent.mock.calls
-        .map(([e]: [CacheEvent]) => e)
+        .map((args: unknown[]) => args[0] as CacheEvent)
         .filter((e) => e.type === 'fetch:error') as Array<{
           type: 'fetch:error';
           key: unknown[];

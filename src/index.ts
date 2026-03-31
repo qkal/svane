@@ -1,8 +1,11 @@
 import { CacheStore } from './core/cache';
 import { normalizeKey, serializeKey } from './core/key';
+import { dehydrate as ssrDehydrate, rehydrate as ssrRehydrate } from './core/ssr';
 import { CACHE_DEFAULTS } from './core/types';
 import type {
   CacheConfig,
+  CacheEvent,
+  DehydratedState,
   MutationConfig,
   MutationStatus,
   QueryConfig,
@@ -12,7 +15,7 @@ import { createReactiveQuery } from './svelte/adapter.svelte';
 import { createReactiveMutation } from './svelte/mutation-adapter.svelte';
 
 export type { CacheConfig, QueryConfig, MutationConfig } from './core/types';
-export type { QueryStatus, MutationStatus } from './core/types';
+export type { QueryStatus, MutationStatus, CacheEvent, DehydratedState } from './core/types';
 
 /**
  * The reactive object returned by `cache.query()`.
@@ -51,6 +54,7 @@ export function createCache(config: Partial<CacheConfig> = {}) {
   const store = new CacheStore({
     persist: resolvedConfig.persist,
     gcTime: resolvedConfig.gcTime,
+    onEvent: resolvedConfig.onEvent,
   });
 
   return {
@@ -90,7 +94,10 @@ export function createCache(config: Partial<CacheConfig> = {}) {
     mutate<TData, TVariables, TContext = unknown>(
       mutationConfig: MutationConfig<TData, TVariables, TContext>,
     ): MutationResult<TData, TVariables> {
-      return createReactiveMutation<TData, TVariables, TContext>(mutationConfig);
+      return createReactiveMutation<TData, TVariables, TContext>(
+        mutationConfig,
+        resolvedConfig.onError,
+      );
     },
 
     /**
@@ -187,6 +194,33 @@ export function createCache(config: Partial<CacheConfig> = {}) {
     cancelQuery(key: string | unknown[]): void {
       const normalized = normalizeKey(key);
       store.cancelQuery(serializeKey(normalized));
+    },
+
+    /**
+     * Serializes all valid cache entries into a JSON-safe snapshot.
+     * Pass the result through SvelteKit's `load()` return value.
+     *
+     * @example
+     * // +page.server.ts
+     * const serverCache = createCache();
+     * await serverCache.prefetch({ key: 'todos', fn: fetchTodos });
+     * return { dehydrated: serverCache.dehydrate() };
+     */
+    dehydrate(): DehydratedState {
+      return ssrDehydrate(store);
+    },
+
+    /**
+     * Seeds this cache from a server-side snapshot. Additive — existing entries
+     * are not overwritten. Call before `cache.query()` to prevent a loading flash.
+     *
+     * @example
+     * // +page.svelte
+     * cache.rehydrate(data.dehydrated);
+     * const todos = cache.query({ key: 'todos', fn: fetchTodos });
+     */
+    rehydrate(state: DehydratedState): void {
+      ssrRehydrate(store, state, resolvedConfig.onEvent);
     },
   };
 }
