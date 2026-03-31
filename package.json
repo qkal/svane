@@ -13,9 +13,7 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "package": "svelte-package -i src",
     "check": "svelte-check --tsconfig ./tsconfig.json",

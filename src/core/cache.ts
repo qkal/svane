@@ -49,6 +49,7 @@ export class CacheStore {
       this.keyArrays.set(key, parsed);
     }
     this.cache.set(key, entry);
+    this.keyArrays.delete(key); // clear cached parse on overwrite, or let lazy load handle it. Actually lazy load is fine. We can just delete to be safe.
     if (this.config.persist) {
       persistCache(this.config.persist, this.cache);
     }
@@ -143,7 +144,18 @@ export class CacheStore {
    * `["todos"]`, `["todos",1]`, `["todos","active"]`, etc.
    */
   invalidate(serializedPrefix: string): void {
-    const prefixArray = JSON.parse(serializedPrefix) as unknown[];
+    let prefixArray: unknown[];
+    try {
+      prefixArray = JSON.parse(serializedPrefix) as unknown[];
+      if (!Array.isArray(prefixArray)) {
+        console.warn(`[kvale] invalidate() received non-array prefix: ${serializedPrefix}`);
+        return;
+      }
+    } catch {
+      console.warn(`[kvale] invalidate() received invalid JSON prefix: ${serializedPrefix}`);
+      return; // Safe fallback on invalid JSON prefix
+    }
+
     const invalidatedKeys: string[] = [];
     const matchedKeyArrays: unknown[][] = [];
     for (const key of this.cache.keys()) {
@@ -251,6 +263,7 @@ export class CacheStore {
       this.keyArrays.delete(key);
       this.gcTimers.delete(key);
       this.keyRefs.delete(key);
+      this.keyArrays.delete(key);
       if (this.config.persist) persistCache(this.config.persist, this.cache);
       this.emitEvent({ type: 'gc', key: JSON.parse(key) as unknown[] });
     }, this.config.gcTime);

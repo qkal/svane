@@ -239,7 +239,10 @@ describe('Svelte adapter', () => {
     it('deduplicates concurrent prefetches for the same key to a single fn call', async () => {
       let resolve!: (v: string) => void;
       const fn = vi.fn(
-        () => new Promise<string>((r) => { resolve = r; }),
+        () =>
+          new Promise<string>((r) => {
+            resolve = r;
+          }),
       );
       const cache = createCache({ refetchOnWindowFocus: false });
 

@@ -409,3 +409,30 @@ describe('CacheStore', () => {
     });
   });
 });
+
+describe('security and robustness', () => {
+  it('invalidate gracefully handles invalid JSON prefix', () => {
+    const store = new CacheStore({ gcTime: 300_000 });
+    store.set('["todos"]', makeEntry([]));
+    // Should not throw
+    expect(() => store.invalidate('{ invalid: true }')).not.toThrow();
+  });
+
+  it('invalidate gracefully skips cache entries with invalid JSON keys', () => {
+    const store = new CacheStore({ gcTime: 300_000 });
+    // manually inject an invalid JSON key into the raw cache map to simulate corrupted localstorage
+    // @ts-expect-error - bypassing private modifier
+    store.cache.set('INVALID_JSON', makeEntry([]));
+    store.set('["todos"]', makeEntry([]));
+
+    // Should not throw, and should still invalidate valid matches
+    expect(() => store.invalidate('["todos"]')).not.toThrow();
+    expect(store.isStale('["todos"]', 30_000)).toBe(true);
+
+    // Ensure corrupted entry remains untouched
+    // @ts-expect-error - bypassing private modifier to verify internal state
+    expect(store.cache.has('INVALID_JSON')).toBe(true);
+    // @ts-expect-error - bypassing private modifier to verify internal state
+    expect(store.cache.get('INVALID_JSON')).toEqual(makeEntry([]));
+  });
+});
