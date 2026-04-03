@@ -3,15 +3,18 @@
 ## [0.1.3] — 2026-04-03
 
 ### Fixed
+
 - **Bug:** `CacheStore.set()` incorrectly deleted parsed key arrays immediately after caching them, forcing redundant re-parsing on every subsequent invalidation
 - **Bug:** Duplicate `keyArrays.delete(key)` call in `startGcTimer` cleanup
 - **Test:** Timestamp race condition in security test for corrupted cache keys
 - **Test:** Set Vitest environment to `jsdom` globally so DOM-dependent tests run correctly
 
 ### Optimized
+
 - `matchesKey()` now uses reference equality fast-path (`===`) before falling back to `JSON.stringify` comparison — significantly faster for string/number key segments
 
 ### Changed (npm release prep)
+
 - Added `main`, `module`, `import` export condition, `sideEffects: false`, `engines`, `keywords`, `homepage`, `repository`, `bugs`, and `author` fields to `package.json`
 - Included `README.md`, `LICENSE`, and `CHANGELOG.md` in published package `files`
 - Version bumped to `0.1.3`
